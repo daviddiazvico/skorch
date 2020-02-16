@@ -1,3 +1,6 @@
+# TODO: INPUT_DIM, OUTPUT_DIM
+
+
 """Neural net classes."""
 
 import fnmatch
@@ -451,7 +454,7 @@ class NeuralNet:
             msg += "."
         return msg
 
-    def initialize_module(self):
+    def initialize_module(INPUT_DIM, OUTPUT_DIM, self):
         """Initializes the module.
 
         Note that if the module has learned parameters, those will be
@@ -470,7 +473,7 @@ class NeuralNet:
                 msg = self._format_reinit_msg("module", kwargs)
                 print(msg)
 
-            module = module(**kwargs)
+            module = module(INPUT_DIM, OUTPUT_DIM, **kwargs)
 
         self.module_ = module.to(self.device)
         return self
@@ -534,7 +537,7 @@ class NeuralNet:
         """Initializes the history."""
         self.history_ = History()
 
-    def initialize(self):
+    def initialize(INPUT_DIM, OUTPUT_DIM, self):
         """Initializes all components of the :class:`.NeuralNet` and
         returns self.
 
@@ -542,7 +545,7 @@ class NeuralNet:
         self.initialize_virtual_params()
         self.initialize_callbacks()
         self.initialize_criterion()
-        self.initialize_module()
+        self.initialize_module(INPUT_DIM, OUTPUT_DIM)
         self.initialize_optimizer()
         self.initialize_history()
 
@@ -811,8 +814,10 @@ class NeuralNet:
           the module and to the ``self.train_split`` call.
 
         """
+        INPUT_DIM = X.shape[1:]
+        OUTPUT_DIM = y.shape[1:]
         if not self.initialized_:
-            self.initialize()
+            self.initialize(INPUT_DIM, OUTPUT_DIM)
 
         self.notify('on_train_begin', X=X, y=y)
         try:
@@ -854,8 +859,10 @@ class NeuralNet:
           the module and to the ``self.train_split`` call.
 
         """
+        INPUT_DIM = X.shape[1:]
+        OUTPUT_DIM = y.shape[1:]
         if not self.warm_start or not self.initialized_:
-            self.initialize()
+            self.initialize(INPUT_DIM, OUTPUT_DIM)
 
         self.partial_fit(X, y, **fit_params)
         return self
@@ -1345,10 +1352,7 @@ class NeuralNet:
         for key in kwargs:
             if key.endswith('_'):
                 continue
-
-            # see https://github.com/skorch-dev/skorch/pull/590 for
-            # why this must be sorted
-            for prefix in sorted(self.prefixes_, key=lambda s: (-len(s), s)):
+            for prefix in self.prefixes_:
                 if key.startswith(prefix):
                     if not key.startswith(prefix + '__'):
                         missing_dunder_kwargs.append((prefix, key))
@@ -1380,7 +1384,7 @@ class NeuralNet:
     def _check_deprecated_params(self, **kwargs):
         pass
 
-    def set_params(self, **kwargs):
+    def set_params(self, INPUT_DIM, OUTPUT_DIM, **kwargs):
         """Set the parameters of this class.
 
         Valid parameter keys can be listed with ``get_params()``.
@@ -1427,7 +1431,7 @@ class NeuralNet:
 
         module_triggers_optimizer_reinit = False
         if any(key.startswith('module') for key in special_params):
-            self.initialize_module()
+            self.initialize_module(INPUT_DIM, OUTPUT_DIM)
             module_triggers_optimizer_reinit = True
 
         optimizer_changed = (
@@ -1440,7 +1444,7 @@ class NeuralNet:
             # need to make sure that we have an initialized model here
             # as the optimizer depends on it.
             if not hasattr(self, 'module_'):
-                self.initialize_module()
+                self.initialize_module(INPUT_DIM, OUTPUT_DIM)
 
             # If we reached this point but the optimizer was not
             # changed, it means that optimizer initialization was
@@ -1597,7 +1601,7 @@ class NeuralNet:
         return requested_device
 
     def load_params(
-            self, f_params=None, f_optimizer=None, f_history=None,
+            self, INPUT_DIM, OUTPUT_DIM, f_params=None, f_optimizer=None, f_history=None,
             checkpoint=None):
         """Loads the the module's parameters, history, and optimizer,
         not the whole object.
@@ -1645,7 +1649,7 @@ class NeuralNet:
 
         if checkpoint is not None:
             if not self.initialized_:
-                self.initialize()
+                self.initialize(INPUT_DIM, OUTPUT_DIM)
             if f_history is None and checkpoint.f_history is not None:
                 self.history = History.from_file(checkpoint.f_history_)
             formatted_files = checkpoint.get_formatted_files(self)
